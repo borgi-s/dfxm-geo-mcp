@@ -1,0 +1,6 @@
+# Default Al 111 @ 17 keV, analytic preview, single frame.
+[reciprocal]
+hkl = [-1, 1, -1]
+keV = 17.0
+backend = "analytic"
+beamstop = false

@@ -1,0 +1,28 @@
+# HCP titanium (10-1) pyramidal reflection @ 17 keV, oblique geometry.
+# (0002) basal reflection is NOT Laue-reachable at 17 keV for this mount;
+# use the 1st-order pyramidal (1, 0, -1) instead.
+# eta from compute_omega_eta(CrystalMount(hexagonal, a=2.951e-10, c=4.684e-10,
+#   structure_type="hcp", mount_x=(2,-1,0), mount_y=(0,1,0), mount_z=(0,0,1)),
+#   hkl=(1,0,-1), keV=17.0).
+# Orthonormal mount required for hexagonal cells (default (1,0,0)/(0,1,0)/(0,0,1)
+# is not orthogonal in reciprocal space for hexagonal lattices).
+
+[reciprocal]
+hkl   = [1, 0, -1]
+keV   = 17.0
+backend = "analytic"
+beamstop = false
+
+[geometry]
+mode = "oblique"
+eta  = -2.077632132724
+
+[crystal]
+lattice = "hexagonal"
+a = 2.951e-10
+c = 4.684e-10
+structure_type = "hcp"
+material = "Ti"
+mount_x = [2, -1, 0]
+mount_y = [0,  1, 0]
+mount_z = [0,  0, 1]
