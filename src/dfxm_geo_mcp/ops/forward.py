@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import io
 import tempfile
@@ -159,7 +160,16 @@ def run_forward(
 
         out_dir = Path(d) / "out"
         t0 = time.perf_counter()
-        run_simulation(config, out_dir)
+        # dfxm-geo prints an "[dfxm-forward] effective config: ..." summary (plus any
+        # numba/scipy chatter) to stdout/stderr. Over the stdio MCP transport, stdout
+        # carries JSON-RPC, so unredirected output corrupts the protocol. Redirect BOTH
+        # streams to an inert in-memory sink for the duration of the sim: this keeps the
+        # JSON-RPC channel pristine WITHOUT writing to the server's real stdout/stderr
+        # (FastMCP wraps stderr with a rich console whose lock deadlocks the stdio event
+        # loop if a worker thread writes volume to it). The captured text is discarded.
+        _sim_output = io.StringIO()
+        with contextlib.redirect_stdout(_sim_output), contextlib.redirect_stderr(_sim_output):
+            run_simulation(config, out_dir)
         wall_s = time.perf_counter() - t0
 
         backend = str(config.reciprocal.backend)

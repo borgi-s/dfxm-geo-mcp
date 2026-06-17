@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import threading
 
 from fastmcp import FastMCP
 from fastmcp.utilities.types import Image
@@ -164,7 +163,17 @@ def diagnose_config(toml_text: str) -> str:
 def main() -> None:
     runtime.configure_numba_cache()
     runtime.point_kernel_lookup_at_cache()
-    threading.Thread(target=runtime.prewarm_jit, daemon=True).start()
+    # dfxm-geo collects git-SHA provenance on every HDF5 write via a `git`
+    # subprocess that doesn't isolate stdin; behind the stdio transport the git
+    # child inherits the JSON-RPC stdin pipe and hangs run_forward. Patch it to
+    # pin the child's stdin to DEVNULL (provenance preserved). See runtime.py.
+    runtime.harden_git_provenance()
+    # No background JIT prewarm: a concurrent thread running a forward sim both prints
+    # to stdout and globally redirects stdout (via guard_stdout), either of which
+    # corrupts the stdio JSON-RPC channel — in particular it swallowed the `initialize`
+    # response, causing clients to time out ("Could not attach"). The first run_forward
+    # call pays the one-time numba JIT cost instead (and the on-disk numba cache makes
+    # subsequent process starts fast).
     mcp.run()  # stdio transport by default
 
 

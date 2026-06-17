@@ -35,3 +35,12 @@ def test_mc_without_kernel_returns_needs_bootstrap():
 def test_unknown_fidelity_raises_not_implemented():
     with pytest.raises(NotImplementedError):
         run_forward("", fidelity="bogus")
+
+
+def test_run_forward_writes_nothing_to_stdout(capsys):
+    # stdio-discipline regression: the dfxm-geo forward sim prints a run summary to
+    # stdout, which would corrupt the JSON-RPC stream when run over the stdio MCP
+    # transport. run_forward must keep stdout pristine (library output -> stderr).
+    run_forward("")
+    captured = capsys.readouterr()
+    assert captured.out == "", f"run_forward leaked to stdout: {captured.out!r}"
