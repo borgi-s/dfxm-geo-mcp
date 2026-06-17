@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from pathlib import Path
 
 from fastmcp import FastMCP
 from fastmcp.utilities.types import Image
@@ -20,7 +21,11 @@ INSTRUCTIONS = (
     "-> run_forward (analytic, no kernel needed). A fidelity='mc' forward needs a "
     "bootstrapped kernel for its reflection/energy; if run_forward reports a missing "
     "kernel, call start_bootstrap then poll get_job_status. Previews are capped "
-    "(Npixels<=128, <=9 frames); production runs use the dfxm-forward CLI."
+    "(Npixels<=128, <=9 frames); production runs use the dfxm-forward CLI. "
+    "run_forward returns the image inline by default; if the user works in a "
+    "file-based client (e.g. Cowork) that doesn't show inline tool images, pass "
+    "run_forward's output_path (a .png path in their working folder) so the image "
+    "is written as a file they can see."
 )
 
 mcp = FastMCP(name="dfxm-geo-mcp", instructions=INSTRUCTIONS)
@@ -68,12 +73,35 @@ def scaffold_config(
 
 
 @mcp.tool(annotations={"title": "Run forward preview", "readOnlyHint": True})
-def run_forward(toml_text: str, fidelity: str = "preview") -> Image | dict:
-    """Run a preview-scale forward simulation and return the rendered DFXM image (or, for
-    fidelity='mc' with no cached kernel, a structured needs-bootstrap hint)."""
+def run_forward(
+    toml_text: str, fidelity: str = "preview", output_path: str | None = None
+) -> Image | dict:
+    """Run a preview-scale forward simulation and return the rendered DFXM image.
+
+    By default the image is returned inline (rendered by clients like Claude
+    Desktop). Pass ``output_path`` to ALSO write the PNG to that file and return
+    its path instead — use this for file-based clients (e.g. Cowork) that surface
+    files in your working folder rather than inline tool images; give a path
+    inside that folder (a ``.png`` suffix is added if missing).
+
+    For fidelity='mc' with no cached kernel, returns a structured needs-bootstrap
+    hint instead.
+    """
     result = _forward.run_forward(toml_text, fidelity=fidelity)
     if result.needs_bootstrap:
         return {"needs_bootstrap": True, **(result.bootstrap_hint or {})}
+    if output_path is not None:
+        path = Path(output_path)
+        if path.suffix.lower() != ".png":
+            path = path.with_suffix(".png")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(result.png_bytes)
+        return {
+            "saved_to": str(path.resolve()),
+            "shape": list(result.stats["shape"]),
+            "backend": result.stats["backend"],
+            "wall_s": result.stats["wall_s"],
+        }
     return Image(data=result.png_bytes, format="png")
 
 
