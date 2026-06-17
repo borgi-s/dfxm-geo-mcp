@@ -12,11 +12,9 @@ from dfxm_geo_mcp.ops.types import ReflectionRecord
 
 
 def find_reflections(toml_text: str, *, hkl_max: int = 3) -> list[ReflectionRecord]:
+    """Enumerate Laue-reachable reflections up to hkl_max; angles returned in degrees."""
     data = tomllib.loads(toml_text) if toml_text.strip() else {}
-    try:
-        mount = _crystal_mount_from_toml(data.get("crystal"))
-    except ValueError:
-        return []
+    mount = _crystal_mount_from_toml(data.get("crystal"))
     keV = float(data.get("reciprocal", {}).get("keV", 17.0))
 
     records: list[ReflectionRecord] = []
