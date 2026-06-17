@@ -1,3 +1,29 @@
 # dfxm-geo-mcp
 
-MCP server for the [dfxm-geo](https://github.com/dtu-physics/dfxm-geo) dark-field X-ray microscopy forward model.
+An MCP server that lets an AI client drive the [dfxm-geo](https://github.com/borgi-s/Geometrical_Optics_master) dark-field X-ray microscopy forward model: validate and scaffold configs, enumerate reachable reflections, and render preview-scale simulations.
+
+![Claude Desktop rendering a DFXM image from a plain-English request](docs/img/money_shot.png)
+
+## Run
+
+    uvx dfxm-geo-mcp
+
+Claude Desktop (`claude_desktop_config.json`):
+
+    {"mcpServers": {"dfxm-geo": {"command": "uvx", "args": ["dfxm-geo-mcp"]}}}
+
+Or: `pip install dfxm-geo-mcp` then `dfxm-geo-mcp`.
+
+> First run pulls a heavy scientific stack (numba/scipy) and warms a JIT cache (~10 s once). No fake demo mode — the sims are real.
+
+## Tools
+
+validate_config · find_reflections · scaffold_config · run_forward (analytic preview) · start_bootstrap / get_job_status / get_job_result (MC fidelity).
+
+## Architecture
+
+A protocol-agnostic ops layer wrapping dfxm-geo, under a thin FastMCP adapter. See `docs/superpowers/specs/`.
+
+## Roadmap (v2)
+
+run_identify · remote HTTP transport · `.mcpb` bundle.
