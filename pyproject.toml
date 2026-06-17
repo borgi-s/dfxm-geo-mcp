@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dfxm-geo-mcp"
+version = "0.1.0"
+description = "MCP server for the dfxm-geo dark-field X-ray microscopy forward model"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Sina Borgi", email = "borgi@dtu.dk"}]
+dependencies = [
+    "fastmcp>=3",
+    "dfxm-geo[cif]>=3.0.0",
+    "pillow>=10",
+    "platformdirs>=4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "mypy>=1.10", "ruff>=0.6"]
+
+[project.scripts]
+dfxm-geo-mcp = "dfxm_geo_mcp.server:main"
+
+[tool.setuptools]
+packages = ["dfxm_geo_mcp", "dfxm_geo_mcp.ops", "dfxm_geo_mcp.knowledge"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.package-data]
+"dfxm_geo_mcp.knowledge" = ["examples/*.toml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict_optional = true
+
+[[tool.mypy.overrides]]
+module = ["dfxm_geo", "dfxm_geo.*", "h5py", "numba", "fastmcp", "fastmcp.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = ["slow: slow integration tests (deselected by default with -m 'not slow')"]
