@@ -47,7 +47,7 @@ def _render_png(image: np.ndarray) -> bytes:
 
 
 def run_forward(
-    toml_text: str, *, fidelity: str = "preview", caps: dict = PREVIEW_CAPS
+    toml_text: str, *, fidelity: str = "preview", caps: dict | None = None
 ) -> ForwardResult:
     """Run a bounded analytic-backend DFXM forward simulation and return a PNG.
 
@@ -69,6 +69,7 @@ def run_forward(
         ValueError: If config is invalid, or user explicitly set a parameter over cap.
         NotImplementedError: If fidelity is neither "preview" nor "mc".
     """
+    caps = caps if caps is not None else PREVIEW_CAPS
     # --- Validation first (single pass; reused by the MC branch below) ---
     report = validate_config(toml_text)
     if not report.ok:

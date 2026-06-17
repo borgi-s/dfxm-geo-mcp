@@ -38,6 +38,8 @@ def validate_config(toml_text: str) -> dict:
 @mcp.tool(annotations={"title": "Find reflections", "readOnlyHint": True, "idempotentHint": True})
 def find_reflections(toml_text: str, hkl_max: int = 3) -> list[dict]:
     """List Laue-reachable reflections for the config's crystal mount and beam energy."""
+    if not 1 <= hkl_max <= 6:
+        raise ValueError(f"hkl_max must be between 1 and 6 (got {hkl_max})")
     return [
         dataclasses.asdict(r) for r in _reflections.find_reflections(toml_text, hkl_max=hkl_max)
     ]
@@ -67,9 +69,12 @@ def scaffold_config(
 
 
 @mcp.tool(annotations={"title": "Run forward preview", "readOnlyHint": True})
-def run_forward(toml_text: str, fidelity: str = "preview") -> Image:
-    """Run a preview-scale forward simulation and return the rendered DFXM image."""
+def run_forward(toml_text: str, fidelity: str = "preview") -> Image | dict:
+    """Run a preview-scale forward simulation and return the rendered DFXM image (or, for
+    fidelity='mc' with no cached kernel, a structured needs-bootstrap hint)."""
     result = _forward.run_forward(toml_text, fidelity=fidelity)
+    if result.needs_bootstrap:
+        return {"needs_bootstrap": True, **(result.bootstrap_hint or {})}
     return Image(data=result.png_bytes, format="png")
 
 
@@ -85,6 +90,8 @@ def start_bootstrap(
     hkl: list[int], energy_keV: float = 17.0, mount_toml: str | None = None
 ) -> dict:
     """Build the MC resolution kernel for a reflection/energy (long; returns a job id)."""
+    if len(hkl) != 3:
+        raise ValueError(f"hkl must have exactly 3 Miller indices, got {len(hkl)}: {hkl}")
     h = (hkl[0], hkl[1], hkl[2])
     job_id = _JOBS.submit(
         ("kernel", h, energy_keV),
@@ -96,14 +103,20 @@ def start_bootstrap(
 @mcp.tool(annotations={"title": "Job status", "readOnlyHint": True})
 def get_job_status(job_id: str) -> dict:
     """Poll a bootstrap job's state and progress."""
-    job = _JOBS.status(job_id)
+    try:
+        job = _JOBS.status(job_id)
+    except KeyError:
+        return {"error": f"unknown job_id: {job_id}"}
     return {"state": job.state, "progress": job.progress, "message": job.message}
 
 
 @mcp.tool(annotations={"title": "Job result", "readOnlyHint": True})
 def get_job_result(job_id: str) -> dict:
     """Fetch a finished bootstrap job's result (kernel path) or its error."""
-    job = _JOBS.status(job_id)
+    try:
+        job = _JOBS.status(job_id)
+    except KeyError:
+        return {"error": f"unknown job_id: {job_id}"}
     if job.state == "succeeded":
         return {"kernel": job.result}
     return {"state": job.state, "error": job.error}
@@ -118,7 +131,10 @@ def schema_resource() -> dict:
 @mcp.resource("examples://{name}")
 def example_resource(name: str) -> str:
     """A canonical example config by name (see examples list)."""
-    return _schema.list_examples()[name]
+    examples = _schema.list_examples()
+    if name not in examples:
+        raise ValueError(f"unknown example '{name}'; available: {sorted(examples)}")
+    return examples[name]
 
 
 @mcp.resource("kernels://cached")
