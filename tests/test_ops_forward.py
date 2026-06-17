@@ -22,6 +22,16 @@ def test_invalid_config_raises_before_compute():
         run_forward("[scan.phi]\nvalue = 0.0\nrange = 0.001\n")  # range without steps
 
 
-def test_mc_fidelity_not_yet_implemented():
+def test_mc_without_kernel_returns_needs_bootstrap():
+    res = run_forward("", fidelity="mc")  # default Al -> (-1,1,-1)@17, no kernel cached
+    assert res.needs_bootstrap is True
+    assert res.bootstrap_hint is not None
+    assert res.bootstrap_hint["hkl"] == [-1, 1, -1]
+    assert res.bootstrap_hint["tool"] == "start_bootstrap"
+    assert res.stats["backend"] == "mc"
+    assert res.stats["kernel"] is None
+
+
+def test_unknown_fidelity_raises_not_implemented():
     with pytest.raises(NotImplementedError):
-        run_forward("", fidelity="mc")
+        run_forward("", fidelity="bogus")

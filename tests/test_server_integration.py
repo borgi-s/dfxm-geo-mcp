@@ -26,6 +26,13 @@ async def test_run_forward_returns_an_image():
 
 
 @pytest.mark.asyncio
+async def test_bootstrap_tools_exist():
+    async with Client(mcp) as client:
+        names = {t.name for t in await client.list_tools()}
+    assert {"start_bootstrap", "get_job_status", "get_job_result"} <= names
+
+
+@pytest.mark.asyncio
 async def test_lists_resources_and_prompts():
     async with Client(mcp) as client:
         resources = await client.list_resources()

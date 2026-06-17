@@ -54,3 +54,5 @@ class ForwardResult:
     png_bytes: bytes
     stats: ForwardStats
     bounded: bool
+    needs_bootstrap: bool = False
+    bootstrap_hint: dict | None = None

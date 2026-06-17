@@ -8,7 +8,8 @@ import threading
 from fastmcp import FastMCP
 from fastmcp.utilities.types import Image
 
-from dfxm_geo_mcp import runtime
+from dfxm_geo_mcp import kernels, runtime
+from dfxm_geo_mcp.jobs import JobRegistry
 from dfxm_geo_mcp.knowledge import schema as _schema
 from dfxm_geo_mcp.ops import forward as _forward
 from dfxm_geo_mcp.ops import reflections as _reflections
@@ -24,6 +25,8 @@ INSTRUCTIONS = (
 )
 
 mcp = FastMCP(name="dfxm-geo-mcp", instructions=INSTRUCTIONS)
+
+_JOBS = JobRegistry()
 
 
 @mcp.tool(annotations={"title": "Validate config", "readOnlyHint": True, "idempotentHint": True})
@@ -70,6 +73,42 @@ def run_forward(toml_text: str, fidelity: str = "preview") -> Image:
     return Image(data=result.png_bytes, format="png")
 
 
+@mcp.tool(
+    annotations={
+        "title": "Start kernel bootstrap",
+        "readOnlyHint": False,
+        "idempotentHint": True,
+        "destructiveHint": False,
+    }
+)
+def start_bootstrap(
+    hkl: list[int], energy_keV: float = 17.0, mount_toml: str | None = None
+) -> dict:
+    """Build the MC resolution kernel for a reflection/energy (long; returns a job id)."""
+    h = (hkl[0], hkl[1], hkl[2])
+    job_id = _JOBS.submit(
+        ("kernel", h, energy_keV),
+        lambda report: kernels.bootstrap(h, energy_keV, mount_toml=mount_toml, report=report),
+    )
+    return {"job_id": job_id}
+
+
+@mcp.tool(annotations={"title": "Job status", "readOnlyHint": True})
+def get_job_status(job_id: str) -> dict:
+    """Poll a bootstrap job's state and progress."""
+    job = _JOBS.status(job_id)
+    return {"state": job.state, "progress": job.progress, "message": job.message}
+
+
+@mcp.tool(annotations={"title": "Job result", "readOnlyHint": True})
+def get_job_result(job_id: str) -> dict:
+    """Fetch a finished bootstrap job's result (kernel path) or its error."""
+    job = _JOBS.status(job_id)
+    if job.state == "succeeded":
+        return {"kernel": job.result}
+    return {"state": job.state, "error": job.error}
+
+
 @mcp.resource("schema://config")
 def schema_resource() -> dict:
     """The annotated dfxm-geo config schema (generated from the dataclasses)."""
@@ -85,7 +124,7 @@ def example_resource(name: str) -> str:
 @mcp.resource("kernels://cached")
 def cached_kernels_resource() -> list[str]:
     """MC kernels currently cached (instantly runnable at fidelity='mc')."""
-    return []  # populated in Task 12
+    return kernels.cached_kernel_names()
 
 
 @mcp.prompt()

@@ -56,24 +56,59 @@ def run_forward(
 
     Args:
         toml_text: TOML configuration string (empty string uses library defaults).
-        fidelity: Only "preview" is implemented; "mc" raises NotImplementedError.
+        fidelity: "preview" (analytic, kernel-free) or "mc" (Monte Carlo, requires a
+            cached kernel for the reflection/energy). Unknown values raise
+            NotImplementedError.
         caps: Cap dict with keys max_npixels, max_nsub, max_frames.
 
     Returns:
-        ForwardResult with png_bytes, stats, and bounded=True.
+        ForwardResult with png_bytes, stats, and bounded=True. For fidelity="mc"
+        without a cached kernel, returns a needs_bootstrap result instead.
 
     Raises:
         ValueError: If config is invalid, or user explicitly set a parameter over cap.
-        NotImplementedError: If fidelity != "preview".
+        NotImplementedError: If fidelity is neither "preview" nor "mc".
     """
-    # --- Validation first ---
+    # --- Validation first (single pass; reused by the MC branch below) ---
     report = validate_config(toml_text)
     if not report.ok:
         raise ValueError(report.issues[0].problem)
 
-    # --- Fidelity guard ---
-    if fidelity != "preview":
-        raise NotImplementedError("MC fidelity is added in Phase D (Task 12).")
+    # --- Fidelity dispatch ---
+    # kernel_label is set for an mc run with a present kernel; None for preview.
+    kernel_label: str | None = None
+    if fidelity == "mc":
+        # Lazy import keeps the analytic path free of kernel-module overhead.
+        from dfxm_geo_mcp import kernels
+
+        assert report.resolved is not None  # report.ok implies resolved is set
+        hkl = report.resolved["reflection"]
+        keV = report.resolved["energy_keV"]
+        if not kernels.kernel_present(hkl, keV):
+            # No cached kernel: return early, before any expensive compute.
+            miss_stats: ForwardStats = {
+                "shape": (0,),
+                "vmin": 0.0,
+                "vmax": 0.0,
+                "backend": "mc",
+                "kernel": None,
+                "wall_s": 0.0,
+            }
+            return ForwardResult(
+                png_bytes=b"",
+                stats=miss_stats,
+                bounded=False,
+                needs_bootstrap=True,
+                bootstrap_hint={
+                    "hkl": list(hkl),
+                    "energy_keV": keV,
+                    "tool": "start_bootstrap",
+                },
+            )
+        # Kernel present: fall through to the compute block WITHOUT forcing analytic.
+        kernel_label = f"{hkl[0]}{hkl[1]}{hkl[2]}@{keV:g}keV"
+    elif fidelity != "preview":
+        raise NotImplementedError(f"unknown fidelity {fidelity!r}")
 
     # --- Check for explicitly over-cap Npixels in raw TOML ---
     # Empty TOML or omitted detector_geometry gets clamped silently.
@@ -115,14 +150,18 @@ def run_forward(
                 f"Use the dfxm-forward CLI."
             )
 
-        # Force the kernel-free analytic backend for the preview.
-        config.reciprocal.backend = "analytic"
-        config.reciprocal.beamstop = False
+        # Force the kernel-free analytic backend for the preview only.
+        # For mc, keep the config's (kernel-backed) backend untouched.
+        if fidelity == "preview":
+            config.reciprocal.backend = "analytic"
+            config.reciprocal.beamstop = False
 
         out_dir = Path(d) / "out"
         t0 = time.perf_counter()
         run_simulation(config, out_dir)
         wall_s = time.perf_counter() - t0
+
+        backend = str(config.reciprocal.backend)
 
         with h5py.File(out_dir / "dfxm_geo.h5", "r") as h5:
             frames = np.asarray(h5[_IMAGE_DATASET])  # (frames, H, W) or (H, W)
@@ -132,8 +171,8 @@ def run_forward(
         "shape": tuple(int(s) for s in image.shape),
         "vmin": float(image.min()),
         "vmax": float(image.max()),
-        "backend": "analytic",
-        "kernel": None,
+        "backend": backend,
+        "kernel": kernel_label,
         "wall_s": round(wall_s, 3),
     }
     return ForwardResult(png_bytes=_render_png(image), stats=stats, bounded=True)
