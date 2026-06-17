@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "mypy>=1.10", "ruff>=0.6"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "mypy>=1.10", "ruff>=0.6"]
 
 [project.scripts]
 dfxm-geo-mcp = "dfxm_geo_mcp.server:main"
@@ -47,4 +47,5 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
 markers = ["slow: slow integration tests (deselected by default with -m 'not slow')"]
