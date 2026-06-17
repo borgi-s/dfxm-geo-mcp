@@ -25,8 +25,17 @@ _RECIPROCAL_VALID_KEYS: frozenset[str] = frozenset(
 )
 
 
-def _check_unknown_reciprocal_keys(raw: dict) -> list[ConfigIssue]:
-    """Return ConfigIssue entries for any unrecognised keys in [reciprocal]."""
+def _check_unknown_reciprocal_keys(raw: dict[str, object]) -> list[ConfigIssue]:
+    """Return ConfigIssue entries for any unrecognised keys in [reciprocal].
+
+    Only [reciprocal] needs this pre-validation because ReciprocalConfig.from_dict
+    silently drops unknown keys instead of raising an error.  Every other block
+    ([detector], [io], [postprocess], [scan.<axis>]) is constructed via **-expansion
+    inside SimulationConfig.from_toml, so an unknown key there triggers a TypeError
+    which is caught structurally in the full-parse step below.  Adding per-field
+    detection for those blocks would be YAGNI — the TypeError path already surfaces
+    the problem with a helpful message.
+    """
     reciprocal_raw = raw.get("reciprocal")
     if not isinstance(reciprocal_raw, dict):
         return []
@@ -92,19 +101,6 @@ def validate_config(toml_text: str) -> ValidationReport:
         path.write_text(toml_text, encoding="utf-8")
         try:
             config = SimulationConfig.from_toml(path)
-        except tomllib.TOMLDecodeError as exc:
-            return ValidationReport(
-                ok=False,
-                issues=[
-                    ConfigIssue(
-                        block="(file)",
-                        field="(syntax)",
-                        problem=str(exc),
-                        fix="Fix the TOML syntax (check brackets, quotes, =).",
-                    )
-                ],
-                resolved=None,
-            )
         except (ValueError, KeyError, TypeError) as exc:
             return ValidationReport(
                 ok=False,
