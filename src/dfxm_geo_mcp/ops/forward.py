@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import io
+import math
 import tempfile
 import time
 import tomllib
@@ -17,7 +18,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from dfxm_geo.config import SimulationConfig  # noqa: E402
+from dfxm_geo.config import SimulationConfig, run_theta  # noqa: E402
 from dfxm_geo.orchestrator import run_simulation  # noqa: E402
 
 from dfxm_geo_mcp.ops.types import ForwardResult, ForwardStats  # noqa: E402
@@ -37,9 +38,21 @@ def _frame_count(config: SimulationConfig) -> int:
     return n
 
 
-def _render_png(image: np.ndarray) -> bytes:
+def _pixel_aspect(two_theta: float) -> float:
+    """imshow aspect for physically-square DFXM pixels.
+
+    DFXM x-pixels are coarser than y-pixels by 1/sin(2theta), so the detector
+    image has fewer columns than rows for a square field of view. imshow's
+    ``aspect`` is the displayed height of one y-unit over one x-unit; setting it
+    to ``sin(2theta)`` (< 1) draws each x-pixel 1/sin(2theta) wider, restoring the
+    physical square. (Al (111) @ 17 keV: 2theta ~0.31 rad -> aspect ~0.31 -> ~3.24x.)
+    """
+    return math.sin(two_theta)
+
+
+def _render_png(image: np.ndarray, *, aspect: float = 1.0) -> bytes:
     fig, axis = plt.subplots(figsize=(4.5, 4.0), dpi=110)
-    im = axis.imshow(image, cmap="magma", origin="lower")  # default 'equal' aspect: square pixels
+    im = axis.imshow(image, cmap="magma", origin="lower", aspect=aspect)
     axis.set_xlabel("x (pixels)")
     axis.set_ylabel("y (pixels)")
     cbar = fig.colorbar(im, ax=axis, fraction=0.046, pad=0.04)
@@ -189,4 +202,9 @@ def run_forward(
         "kernel": kernel_label,
         "wall_s": round(wall_s, 3),
     }
-    return ForwardResult(png_bytes=_render_png(image), stats=stats, bounded=True)
+    # Anisotropic detector: x-pixels are 1/sin(2theta) coarser than y-pixels, so
+    # stretch x at render time to show the physical square (not a tall strip).
+    aspect = _pixel_aspect(2.0 * run_theta(config))
+    return ForwardResult(
+        png_bytes=_render_png(image, aspect=aspect), stats=stats, bounded=True
+    )
