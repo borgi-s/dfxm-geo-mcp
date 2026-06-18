@@ -81,3 +81,10 @@ async def test_scaffold_tool_strong_beam_param_omits_scan_block():
     async with Client(mcp) as client:
         result = await client.call_tool("scaffold_config", {"beam": "strong"})
     assert "[scan.phi]" not in result.data
+
+
+@pytest.mark.asyncio
+async def test_scaffold_tool_phi_offset_param_accepted():
+    async with Client(mcp) as client:
+        result = await client.call_tool("scaffold_config", {"phi_offset": 1.75e-4})
+    assert "[scan.phi]" in result.data

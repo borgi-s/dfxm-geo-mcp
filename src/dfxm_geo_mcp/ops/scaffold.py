@@ -46,7 +46,7 @@ def _scan_phi_lines(phi: float) -> list[str]:
     """
     if phi == 0.0:
         return []
-    return ["", "[scan.phi]", f"value = {phi}"]
+    return ["", "[scan.phi]", f"value = {phi:.10g}"]
 
 
 # Mount used for non-FCC cubic oblique runs. Matches the BCC example in
@@ -100,6 +100,18 @@ def scaffold_config(
     guaranteed to satisfy ``validate_config(...).ok`` for the supported cases
     (default FCC symmetric, explicit FCC aluminium, BCC cubic oblique).
 
+    Parameters
+    ----------
+    beam:
+        Rocking condition preset. ``"weak"`` (default) places a single frame at a
+        fixed φ offset off the Bragg peak — the dislocation-contrast condition used
+        in the dfxm-geo example notebooks. ``"strong"`` sets φ = 0 (on-peak); no
+        ``[scan.phi]`` block is emitted.
+    phi_offset:
+        φ in radians. When given, overrides the ``beam`` preset and sets the
+        ``[scan.phi]`` value directly. Pass ``0.0`` to suppress the scan block
+        without changing ``beam``. ``None`` (default) means use the preset.
+
     Current limitations
     -------------------
     * **FCC** scaffolding assumes aluminium. Passing ``material`` with any value
@@ -109,7 +121,9 @@ def scaffold_config(
     * **Non-FCC lattice lookup** only covers the materials listed in
       ``_LATTICE_A_M`` (currently W and Fe). Any other non-FCC material raises
       ``ValueError`` — there is no silent fallback to a wrong lattice constant.
-    * ``scan_mode`` is accepted but currently a no-op; no scan block is emitted.
+    * ``scan_mode`` is accepted but a no-op for the scan *type*. A single-frame
+      ``[scan.phi]`` block is always emitted (when phi != 0) to set the rocking
+      condition (weak-beam offset by default).
     """
     if beam not in ("weak", "strong"):
         raise ValueError(f"beam must be 'weak' or 'strong', got {beam!r}")

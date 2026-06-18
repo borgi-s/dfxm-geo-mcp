@@ -71,7 +71,7 @@ def test_phi_offset_zero_emits_no_scan_block():
 
 
 def test_invalid_beam_raises():
-    with pytest.raises(ValueError, match="weak"):
+    with pytest.raises(ValueError, match="beam must be"):
         scaffold_config(beam="medium")
 
 
