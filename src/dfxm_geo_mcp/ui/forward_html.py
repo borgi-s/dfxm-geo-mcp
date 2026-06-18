@@ -139,8 +139,8 @@ def build_rocking_html(
     '<polyline fill="none" stroke="#e0457b" stroke-width="2" points="'+pts+'"/>'+
     '<line id="mk" stroke="#7fd1ff" stroke-width="1.5" y1="'+P+'" y2="'+(H-P)+'"/>'+
     '<circle id="dot" r="4" fill="#7fd1ff"/>'+
-    '<text class="axlabel" x="'+P+'" y="'+(H-8)+'">phi='+x0.toExponential(2)+'</text>'+
-    '<text class="axlabel" x="'+(W-P)+'" y="'+(H-8)+'" text-anchor="end">phi='+x1.toExponential(2)+'</text>'+
+    '<text class="axlabel" x="'+P+'" y="'+(H-8)+'">φ='+x0.toExponential(2)+'</text>'+
+    '<text class="axlabel" x="'+(W-P)+'" y="'+(H-8)+'" text-anchor="end">φ='+x1.toExponential(2)+'</text>'+
     '<text class="axlabel" x="6" y="'+(P+4)+'">I max</text>';
   function fmt(v){{return (Math.abs(v)<1e-2||Math.abs(v)>=1e4)?v.toExponential(3):v.toFixed(3);}}
   function render(i){{

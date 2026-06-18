@@ -73,6 +73,12 @@ def run_rocking(
             f"Npixels={user_npixels} exceeds the preview cap ({caps['max_npixels']}). "
             f"Run production sizes with the dfxm-forward CLI."
         )
+    user_nsub = raw.get("detector_geometry", {}).get("Nsub")
+    if user_nsub is not None and int(user_nsub) > caps["max_nsub"]:
+        raise ValueError(
+            f"Nsub={user_nsub} exceeds the preview cap ({caps['max_nsub']}). "
+            f"Use the dfxm-forward CLI."
+        )
 
     with tempfile.TemporaryDirectory() as d:
         cfg_path = Path(d) / "config.toml"

@@ -30,3 +30,10 @@ def test_run_rocking_rejects_over_cap_frames():
 def test_run_rocking_rejects_bad_phi_max():
     with pytest.raises(ValueError):
         run_rocking("", phi_max=0.0)
+
+
+def test_run_rocking_rejects_over_cap_nsub():
+    # Mirror run_forward's contract: an explicit over-cap Nsub is a clear error,
+    # not a silent downgrade.
+    with pytest.raises(ValueError, match="Nsub"):
+        run_rocking("[detector_geometry]\nNsub = 64\n")

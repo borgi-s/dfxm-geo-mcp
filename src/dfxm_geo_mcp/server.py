@@ -150,6 +150,8 @@ def run_forward(
     html_meta = dict(result.meta or {})
     html_meta.setdefault("shape", list(result.stats["shape"]))
     html_meta.setdefault("backend", result.stats["backend"])
+    html_meta.setdefault("vmin", round(result.stats["vmin"], 6))
+    html_meta.setdefault("vmax", round(result.stats["vmax"], 6))
     html_meta["wall_s"] = result.stats["wall_s"]
     html_path = path.with_suffix(".html")
     html_path.write_text(
