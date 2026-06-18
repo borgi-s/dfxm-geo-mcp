@@ -56,3 +56,15 @@ class ForwardResult:
     bounded: bool
     needs_bootstrap: bool = False
     bootstrap_hint: dict | None = None
+    meta: dict | None = None
+
+
+@dataclass(frozen=True)
+class RockingResult:
+    frames_png: list[bytes]
+    phis: list[float]
+    intensities: list[float]
+    vmin: float
+    vmax: float
+    meta: dict
+    bounded: bool = True

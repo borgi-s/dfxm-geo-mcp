@@ -16,7 +16,9 @@ from dfxm_geo_mcp.knowledge import schema as _schema
 from dfxm_geo_mcp.ops import forward as _forward
 from dfxm_geo_mcp.ops import reflections as _reflections
 from dfxm_geo_mcp.ops import scaffold as _scaffold
+from dfxm_geo_mcp.ops import rocking as _rocking
 from dfxm_geo_mcp.ops import validate as _validate
+from dfxm_geo_mcp.ui import forward_html as _html
 from dfxm_geo_mcp.ui import forward_preview as _ui
 
 INSTRUCTIONS = (
@@ -34,6 +36,9 @@ INSTRUCTIONS = (
     "Previews default to the WEAK-beam condition (scaffold_config beam='weak', the "
     "dislocation-contrast condition off the Bragg peak); pass beam='strong' for the "
     "on-peak bright field, or phi_offset (radians) for a specific rocking offset. "
+    "For a φ rocking series, call run_rocking: it writes a self-contained INTERACTIVE "
+    "HTML viewer (frame scrubber + live rocking-curve plot, defaulting to one end of "
+    "the curve) and reports its .html path — ALWAYS give the user that path. "
 )
 
 mcp = FastMCP(name="dfxm-geo-mcp", instructions=INSTRUCTIONS)
@@ -139,6 +144,20 @@ def run_forward(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(result.png_bytes)
 
+    # Also write a self-contained static HTML next to the PNG: opens full-size in
+    # any browser (sidesteps the inline widget's tool-card burial) and is the
+    # foundation the interactive run_rocking viewer builds on.
+    html_meta = dict(result.meta or {})
+    html_meta.setdefault("shape", list(result.stats["shape"]))
+    html_meta.setdefault("backend", result.stats["backend"])
+    html_meta.setdefault("vmin", round(result.stats["vmin"], 6))
+    html_meta.setdefault("vmax", round(result.stats["vmax"], 6))
+    html_meta["wall_s"] = result.stats["wall_s"]
+    html_path = path.with_suffix(".html")
+    html_path.write_text(
+        _html.build_static_html(_ui._b64(result.png_bytes), html_meta), encoding="utf-8"
+    )
+
     supports_ui = False
     if ctx is not None:
         try:
@@ -147,8 +166,55 @@ def run_forward(
             supports_ui = False
 
     return _ui.build_forward_result(
-        result.png_bytes, cast(dict[str, Any], result.stats), str(path.resolve()), supports_ui=supports_ui
+        result.png_bytes,
+        cast(dict[str, Any], result.stats),
+        str(path.resolve()),
+        supports_ui=supports_ui,
+        html_path=str(html_path.resolve()),
     )
+
+
+@mcp.tool(annotations={"title": "Run rocking-curve viewer", "readOnlyHint": True})
+def run_rocking(
+    toml_text: str,
+    n_frames: int = 21,
+    phi_max: float = 6e-4,
+    output_path: str | None = None,
+) -> dict:
+    """Run a bounded φ rocking scan and write a self-contained INTERACTIVE HTML
+    viewer (a frame scrubber + a live rocking-curve plot) that opens full-size in
+    any browser and is surfaced by file-showing clients (Cowork).
+
+    The scan is centered on the Bragg peak, so the viewer's default position is one
+    end of the rocking curve (a weak-beam tail), consistent with the weak-beam
+    default. Pass ``n_frames`` (2..41) and ``phi_max`` (radians, the φ half-range)
+    to control resolution and span, and ``output_path`` (a ``.html``) to choose
+    where the viewer is written.
+
+    ALWAYS tell the user the saved .html path so they can open it.
+    """
+    res = _rocking.run_rocking(toml_text, n_frames=n_frames, phi_max=phi_max)
+    frame_b64s = [_ui._b64(p) for p in res.frames_png]
+    html = _html.build_rocking_html(frame_b64s, res.phis, res.intensities, res.meta)
+
+    if output_path is not None:
+        path = Path(output_path)
+        if path.suffix.lower() != ".html":
+            path = path.with_suffix(".html")
+    else:
+        path = runtime.cache_dir() / "previews" / "forward_rocking.html"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html, encoding="utf-8")
+
+    peak_i = max(range(len(res.intensities)), key=lambda i: res.intensities[i])
+    return {
+        "path": str(path.resolve()),
+        "n_frames": res.meta["n_frames"],
+        "phi_max": phi_max,
+        "peak_phi": res.phis[peak_i],
+        "intensity_min": min(res.intensities),
+        "intensity_max": max(res.intensities),
+    }
 
 
 @mcp.tool(
