@@ -18,7 +18,9 @@ Or: `pip install dfxm-geo-mcp` then `dfxm-geo-mcp`.
 
 ## Tools
 
-validate_config · find_reflections · scaffold_config · run_forward (analytic preview) · start_bootstrap / get_job_status / get_job_result (MC fidelity).
+validate_config · find_reflections · scaffold_config · run_forward (analytic preview — saves a PNG **and** a self-contained `.html`) · run_rocking (interactive φ-rocking-curve viewer: a single self-contained `.html` with a frame scrubber + live rocking-curve plot) · start_bootstrap / get_job_status / get_job_result (MC fidelity).
+
+Both `run_forward` and `run_rocking` write self-contained HTML (image(s) embedded, all CSS/JS inline, no external origins) that opens full-size in any browser and is surfaced by file-showing clients.
 
 ## Architecture
 
