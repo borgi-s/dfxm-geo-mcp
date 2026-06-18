@@ -16,7 +16,9 @@ from dfxm_geo_mcp.knowledge import schema as _schema
 from dfxm_geo_mcp.ops import forward as _forward
 from dfxm_geo_mcp.ops import reflections as _reflections
 from dfxm_geo_mcp.ops import scaffold as _scaffold
+from dfxm_geo_mcp.ops import rocking as _rocking
 from dfxm_geo_mcp.ops import validate as _validate
+from dfxm_geo_mcp.ui import forward_html as _html
 from dfxm_geo_mcp.ui import forward_preview as _ui
 
 INSTRUCTIONS = (
@@ -139,6 +141,18 @@ def run_forward(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(result.png_bytes)
 
+    # Also write a self-contained static HTML next to the PNG: opens full-size in
+    # any browser (sidesteps the inline widget's tool-card burial) and is the
+    # foundation the interactive run_rocking viewer builds on.
+    html_meta = dict(result.meta or {})
+    html_meta.setdefault("shape", list(result.stats["shape"]))
+    html_meta.setdefault("backend", result.stats["backend"])
+    html_meta["wall_s"] = result.stats["wall_s"]
+    html_path = path.with_suffix(".html")
+    html_path.write_text(
+        _html.build_static_html(_ui._b64(result.png_bytes), html_meta), encoding="utf-8"
+    )
+
     supports_ui = False
     if ctx is not None:
         try:
@@ -147,7 +161,11 @@ def run_forward(
             supports_ui = False
 
     return _ui.build_forward_result(
-        result.png_bytes, cast(dict[str, Any], result.stats), str(path.resolve()), supports_ui=supports_ui
+        result.png_bytes,
+        cast(dict[str, Any], result.stats),
+        str(path.resolve()),
+        supports_ui=supports_ui,
+        html_path=str(html_path.resolve()),
     )
 
 

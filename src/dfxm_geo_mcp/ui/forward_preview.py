@@ -89,23 +89,34 @@ def _b64(png_bytes: bytes) -> str:
     return base64.b64encode(png_bytes).decode("ascii")
 
 
-def _note(stats: dict, saved_path: str) -> str:
-    return (
+def _note(stats: dict, saved_path: str, html_path: str | None = None) -> str:
+    note = (
         f"DFXM forward preview saved to: {saved_path} "
         f"(shape {tuple(stats['shape'])}, backend {stats['backend']}). "
         "Tell the user this path so they can open the image; it also renders "
         "inline in clients that support MCP Apps (Claude Desktop, ChatGPT)."
     )
+    if html_path is not None:
+        note += (
+            f" A self-contained HTML version (opens full-size in any browser) "
+            f"is at: {html_path} — give the user this path too."
+        )
+    return note
 
 
 def build_forward_result(
-    png_bytes: bytes, stats: dict[str, Any], saved_path: str, *, supports_ui: bool
+    png_bytes: bytes,
+    stats: dict[str, Any],
+    saved_path: str,
+    *,
+    supports_ui: bool,
+    html_path: str | None = None,
 ) -> ToolResult | list[Any]:
     """Shape run_forward's return value for UI-capable vs text-only clients.
 
     The saved file path is reported in both branches (the caller always writes it).
     """
-    note = _note(stats, saved_path)
+    note = _note(stats, saved_path, html_path)
     if not supports_ui:
         return [Image(data=png_bytes, format="png"), note]
 
