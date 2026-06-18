@@ -5,8 +5,10 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
-from fastmcp import FastMCP
-from fastmcp.utilities.types import Image
+from typing import Any, cast
+
+from fastmcp import Context, FastMCP
+from fastmcp.apps import UI_EXTENSION_ID, AppConfig
 
 from dfxm_geo_mcp import kernels, runtime
 from dfxm_geo_mcp.jobs import JobRegistry
@@ -15,6 +17,7 @@ from dfxm_geo_mcp.ops import forward as _forward
 from dfxm_geo_mcp.ops import reflections as _reflections
 from dfxm_geo_mcp.ops import scaffold as _scaffold
 from dfxm_geo_mcp.ops import validate as _validate
+from dfxm_geo_mcp.ui import forward_preview as _ui
 
 INSTRUCTIONS = (
     "Drive the dfxm-geo forward model. Typical flow: scaffold_config -> validate_config "
@@ -22,10 +25,12 @@ INSTRUCTIONS = (
     "bootstrapped kernel for its reflection/energy; if run_forward reports a missing "
     "kernel, call start_bootstrap then poll get_job_status. Previews are capped "
     "(Npixels<=128, <=9 frames); production runs use the dfxm-forward CLI. "
-    "run_forward saves the rendered image to a file and reports its path; Claude "
-    "does NOT render inline tool images, so ALWAYS give the user that saved path "
-    "so they can open it. Pass run_forward's output_path (a .png in the user's "
-    "working folder, e.g. the Cowork files folder) to control where it is written."
+    "run_forward renders the image inline where the client supports MCP Apps "
+    "(Claude Desktop, ChatGPT connector) and ALWAYS also saves the PNG to a file "
+    "and reports its path; ALWAYS give the user that saved path so they can open "
+    "it even if inline rendering fails. Pass run_forward's output_path (a .png in "
+    "the user's working folder, e.g. the Cowork files folder) to control where it "
+    "is written."
 )
 
 mcp = FastMCP(name="dfxm-geo-mcp", instructions=INSTRUCTIONS)
@@ -72,27 +77,36 @@ def scaffold_config(
     )
 
 
+@mcp.resource(_ui.FORWARD_PREVIEW_URI, mime_type="text/html;profile=mcp-app")
+def forward_preview_view() -> str:
+    """HTML view that renders run_forward's PNG inline (MCP Apps / ChatGPT widget)."""
+    return _ui.FORWARD_PREVIEW_HTML
+
+
 @mcp.tool(
     annotations={"title": "Run forward preview", "readOnlyHint": True},
-    # No declared output schema: this tool returns image+text content blocks on
-    # success and a structured dict only for the needs-bootstrap case. A schema
-    # derived from the union would reject the content-list return.
+    # No declared output schema: returns image+text content blocks (or a ToolResult)
+    # on success and a structured dict only for the needs-bootstrap case.
     output_schema=None,
+    app=AppConfig(resource_uri=_ui.FORWARD_PREVIEW_URI),
+    # FastMCP emits only the official io.modelcontextprotocol/ui meta; add the
+    # ChatGPT Apps SDK alias by hand so the connector also links the template.
+    meta={"openai/outputTemplate": _ui.FORWARD_PREVIEW_URI},
 )
 def run_forward(
-    toml_text: str, fidelity: str = "preview", output_path: str | None = None
+    toml_text: str,
+    fidelity: str = "preview",
+    output_path: str | None = None,
+    ctx: Context | None = None,
 ) -> list | dict:
     """Run a preview-scale forward simulation, save the DFXM image to a file, and
     return it.
 
-    The rendered PNG is ALWAYS written to a file and its path is reported in the
-    result, because Claude clients (Desktop, claude.ai/Cowork) currently do not
-    render inline MCP tool images — the model sees the image but the user does
-    not, so a real file is the dependable way to view it. Pass ``output_path`` to
-    choose where (e.g. a ``.png`` inside your Cowork working folder so it shows
-    there; a ``.png`` suffix is added if missing); otherwise it goes to a default
-    previews folder under the app cache. The image is also attached inline for any
-    client that renders it.
+    The rendered PNG is ALWAYS written to a file and its path reported. In clients
+    that support MCP Apps (Claude Desktop, ChatGPT connector) the image also renders
+    inline via a ui:// template; other clients (Cowork, Claude Code) get the saved
+    path plus an inline image content block. Pass ``output_path`` to choose where
+    the file is written (a ``.png`` suffix is added if missing).
 
     ALWAYS tell the user the saved file path so they can open the image.
 
@@ -112,13 +126,16 @@ def run_forward(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(result.png_bytes)
 
-    note = (
-        f"DFXM forward preview saved to: {path.resolve()} "
-        f"(shape {tuple(result.stats['shape'])}, backend {result.stats['backend']}). "
-        "Tell the user this path so they can open the image - Claude does not yet "
-        "render inline tool images. The image is also attached inline below."
+    supports_ui = False
+    if ctx is not None:
+        try:
+            supports_ui = ctx.client_supports_extension(UI_EXTENSION_ID)
+        except Exception:
+            supports_ui = False
+
+    return _ui.build_forward_result(
+        result.png_bytes, cast(dict[str, Any], result.stats), str(path.resolve()), supports_ui=supports_ui
     )
-    return [Image(data=result.png_bytes, format="png"), note]
 
 
 @mcp.tool(

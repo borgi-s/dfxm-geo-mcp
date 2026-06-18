@@ -99,7 +99,7 @@ def _note(stats: dict, saved_path: str) -> str:
 
 
 def build_forward_result(
-    png_bytes: bytes, stats: dict, saved_path: str, *, supports_ui: bool
+    png_bytes: bytes, stats: dict[str, Any], saved_path: str, *, supports_ui: bool
 ) -> ToolResult | list[Any]:
     """Shape run_forward's return value for UI-capable vs text-only clients.
 
