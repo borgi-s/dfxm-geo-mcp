@@ -44,3 +44,15 @@ def test_run_forward_writes_nothing_to_stdout(capsys):
     run_forward("")
     captured = capsys.readouterr()
     assert captured.out == "", f"run_forward leaked to stdout: {captured.out!r}"
+
+
+def test_render_png_returns_valid_annotated_png():
+    import numpy as np
+
+    from dfxm_geo_mcp.ops.forward import _render_png
+
+    img = np.random.default_rng(0).random((32, 32))
+    png = _render_png(img)
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    # A colorbar + axes make the figure non-trivial; guard against an empty render.
+    assert len(png) > 2000

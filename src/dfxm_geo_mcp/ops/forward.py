@@ -38,11 +38,14 @@ def _frame_count(config: SimulationConfig) -> int:
 
 
 def _render_png(image: np.ndarray) -> bytes:
-    fig, axis = plt.subplots(figsize=(4, 4), dpi=110)
-    axis.imshow(image, cmap="magma", origin="lower", aspect="auto")
-    axis.axis("off")
+    fig, axis = plt.subplots(figsize=(4.5, 4.0), dpi=110)
+    im = axis.imshow(image, cmap="magma", origin="lower")  # default 'equal' aspect: square pixels
+    axis.set_xlabel("x (pixels)")
+    axis.set_ylabel("y (pixels)")
+    cbar = fig.colorbar(im, ax=axis, fraction=0.046, pad=0.04)
+    cbar.set_label("intensity (a.u.)")
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0)
+    fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.1)
     plt.close(fig)
     return buf.getvalue()
 

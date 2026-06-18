@@ -30,6 +30,25 @@ _LATTICE_A_M: dict[str, float] = {
     "Fe": 2.87e-10,   # alpha-iron, BCC
 }
 
+# Weak-beam rocking offset (radians). The dislocation-contrast condition: a single
+# frame at a fixed phi offset off the Bragg peak. This is the value used in the
+# dfxm-geo example notebooks; it is APPROXIMATE — the physically correct offset
+# scales with the rocking-curve width (reflection/energy/material). Callers needing
+# a specific value pass `phi_offset` to scaffold_config.
+WEAK_BEAM_PHI_RAD = 1.75e-4
+
+
+def _scan_phi_lines(phi: float) -> list[str]:
+    """TOML lines for a fixed single-frame [scan.phi]; empty when phi == 0.
+
+    A bare `value` (no range/steps) fixes phi at a single frame — no rocking scan,
+    so run_forward renders that one frame (no max-projection).
+    """
+    if phi == 0.0:
+        return []
+    return ["", "[scan.phi]", f"value = {phi:.10g}"]
+
+
 # Mount used for non-FCC cubic oblique runs. Matches the BCC example in
 # docs/crystal-structures.md ("Oblique-eta requirement (BCC and HCP)").
 _BCC_MOUNT = {
@@ -72,12 +91,26 @@ def scaffold_config(
     cif_path: str | None = None,
     scan_mode: str = "single",
     backend: str = "analytic",
+    beam: str = "weak",
+    phi_offset: float | None = None,
 ) -> str:
     """Emit a valid starter dfxm-geo config as TOML text.
 
     See module docstring for the per-structure contract. The returned text is
     guaranteed to satisfy ``validate_config(...).ok`` for the supported cases
     (default FCC symmetric, explicit FCC aluminium, BCC cubic oblique).
+
+    Parameters
+    ----------
+    beam:
+        Rocking condition preset. ``"weak"`` (default) places a single frame at a
+        fixed φ offset off the Bragg peak — the dislocation-contrast condition used
+        in the dfxm-geo example notebooks. ``"strong"`` sets φ = 0 (on-peak); no
+        ``[scan.phi]`` block is emitted.
+    phi_offset:
+        φ in radians. When given, overrides the ``beam`` preset and sets the
+        ``[scan.phi]`` value directly. Pass ``0.0`` to suppress the scan block
+        without changing ``beam``. ``None`` (default) means use the preset.
 
     Current limitations
     -------------------
@@ -88,8 +121,14 @@ def scaffold_config(
     * **Non-FCC lattice lookup** only covers the materials listed in
       ``_LATTICE_A_M`` (currently W and Fe). Any other non-FCC material raises
       ``ValueError`` — there is no silent fallback to a wrong lattice constant.
-    * ``scan_mode`` is accepted but currently a no-op; no scan block is emitted.
+    * ``scan_mode`` is accepted but a no-op for the scan *type*. A single-frame
+      ``[scan.phi]`` block is always emitted (when phi != 0) to set the rocking
+      condition (weak-beam offset by default).
     """
+    if beam not in ("weak", "strong"):
+        raise ValueError(f"beam must be 'weak' or 'strong', got {beam!r}")
+    phi = phi_offset if phi_offset is not None else (WEAK_BEAM_PHI_RAD if beam == "weak" else 0.0)
+
     hkl = reflection or (-1, 1, -1)
     is_fcc = structure_type is None or structure_type.lower() == "fcc"
     is_oblique = geometry_mode == "oblique"
@@ -112,6 +151,7 @@ def scaffold_config(
         # The analytic backend renders without a beamstop; only the MC backend needs one.
         f"beamstop = {'true' if backend == 'mc' else 'false'}",
     ]
+    lines += _scan_phi_lines(phi)
 
     # FCC symmetric: simplified path needs no [crystal] mount / [geometry] block.
     if is_fcc and not is_oblique and cif_path is None:

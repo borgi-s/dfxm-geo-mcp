@@ -30,7 +30,10 @@ INSTRUCTIONS = (
     "and reports its path; ALWAYS give the user that saved path so they can open "
     "it even if inline rendering fails. Pass run_forward's output_path (a .png in "
     "the user's working folder, e.g. the Cowork files folder) to control where it "
-    "is written."
+    "is written. "
+    "Previews default to the WEAK-beam condition (scaffold_config beam='weak', the "
+    "dislocation-contrast condition off the Bragg peak); pass beam='strong' for the "
+    "on-peak bright field, or phi_offset (radians) for a specific rocking offset. "
 )
 
 mcp = FastMCP(name="dfxm-geo-mcp", instructions=INSTRUCTIONS)
@@ -63,8 +66,16 @@ def scaffold_config(
     geometry_mode: str = "symmetric",
     cif_path: str | None = None,
     scan_mode: str = "single",
+    beam: str = "weak",
+    phi_offset: float | None = None,
 ) -> str:
-    """Return a valid starter dfxm-geo config (TOML text) for the requested crystal/reflection."""
+    """Return a valid starter dfxm-geo config (TOML text) for the requested crystal/reflection.
+
+    Defaults to the WEAK-beam condition (beam="weak": a single frame at a fixed phi
+    offset off the Bragg peak — the dislocation-contrast condition). Pass beam="strong"
+    for the on-peak (bright-field) condition, or phi_offset (radians) for a specific
+    rocking offset that overrides the preset.
+    """
     hkl = tuple(reflection) if reflection else None
     return _scaffold.scaffold_config(
         material=material,
@@ -74,6 +85,8 @@ def scaffold_config(
         geometry_mode=geometry_mode,
         cif_path=cif_path,
         scan_mode=scan_mode,
+        beam=beam,
+        phi_offset=phi_offset,
     )
 
 
