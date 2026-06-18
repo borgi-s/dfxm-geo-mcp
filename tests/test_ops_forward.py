@@ -56,3 +56,25 @@ def test_render_png_returns_valid_annotated_png():
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
     # A colorbar + axes make the figure non-trivial; guard against an empty render.
     assert len(png) > 2000
+
+
+def test_render_png_honours_shared_vmin_vmax():
+    import numpy as np
+
+    from dfxm_geo_mcp.ops.forward import _render_png
+
+    img = np.zeros((16, 16))
+    img[0, 0] = 1.0
+    a = _render_png(img, vmin=0.0, vmax=1.0)
+    b = _render_png(img, vmin=0.0, vmax=1000.0)
+    assert a[:8] == b"\x89PNG\r\n\x1a\n"
+    # A different color scale must change the rendered bytes.
+    assert a != b
+
+
+def test_run_forward_populates_meta():
+    res = run_forward("")
+    assert res.meta is not None
+    assert tuple(res.meta["reflection"]) == (-1, 1, -1)
+    assert res.meta["energy_keV"] == 17.0
+    assert res.meta["two_theta_deg"] > 0

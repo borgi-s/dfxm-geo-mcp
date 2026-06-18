@@ -50,9 +50,15 @@ def _pixel_aspect(two_theta: float) -> float:
     return math.sin(two_theta)
 
 
-def _render_png(image: np.ndarray, *, aspect: float = 1.0) -> bytes:
+def _render_png(
+    image: np.ndarray,
+    *,
+    aspect: float = 1.0,
+    vmin: float | None = None,
+    vmax: float | None = None,
+) -> bytes:
     fig, axis = plt.subplots(figsize=(4.5, 4.0), dpi=110)
-    im = axis.imshow(image, cmap="magma", origin="lower", aspect=aspect)
+    im = axis.imshow(image, cmap="magma", origin="lower", aspect=aspect, vmin=vmin, vmax=vmax)
     axis.set_xlabel("x (pixels)")
     axis.set_ylabel("y (pixels)")
     cbar = fig.colorbar(im, ax=axis, fraction=0.046, pad=0.04)
@@ -61,6 +67,26 @@ def _render_png(image: np.ndarray, *, aspect: float = 1.0) -> bytes:
     fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.1)
     plt.close(fig)
     return buf.getvalue()
+
+
+def _preview_meta(config: SimulationConfig, resolved: dict | None) -> dict:
+    """Presentation metadata for the static HTML / inline caption.
+
+    Pure-derived from the (already-capped, analytic) config and the validator's
+    resolved summary; carries no heavy data.
+    """
+    two_theta_deg = math.degrees(2.0 * run_theta(config))
+    phi = float(config.scan.phi.value)
+    meta: dict = {
+        "two_theta_deg": round(two_theta_deg, 4),
+        "phi": phi,
+        "beam": "strong" if phi == 0.0 else "weak",
+    }
+    if resolved is not None:
+        meta["reflection"] = list(resolved["reflection"])
+        meta["energy_keV"] = resolved["energy_keV"]
+        meta["backend"] = resolved["backend"]
+    return meta
 
 
 def run_forward(
@@ -205,6 +231,8 @@ def run_forward(
     # Anisotropic detector: x-pixels are 1/sin(2theta) coarser than y-pixels, so
     # stretch x at render time to show the physical square (not a tall strip).
     aspect = _pixel_aspect(2.0 * run_theta(config))
+    meta = _preview_meta(config, report.resolved)
+    meta["shape"] = list(stats["shape"])
     return ForwardResult(
-        png_bytes=_render_png(image, aspect=aspect), stats=stats, bounded=True
+        png_bytes=_render_png(image, aspect=aspect), stats=stats, bounded=True, meta=meta
     )
