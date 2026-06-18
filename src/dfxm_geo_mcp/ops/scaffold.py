@@ -30,6 +30,25 @@ _LATTICE_A_M: dict[str, float] = {
     "Fe": 2.87e-10,   # alpha-iron, BCC
 }
 
+# Weak-beam rocking offset (radians). The dislocation-contrast condition: a single
+# frame at a fixed phi offset off the Bragg peak. This is the value used in the
+# dfxm-geo example notebooks; it is APPROXIMATE — the physically correct offset
+# scales with the rocking-curve width (reflection/energy/material). Callers needing
+# a specific value pass `phi_offset` to scaffold_config.
+WEAK_BEAM_PHI_RAD = 1.75e-4
+
+
+def _scan_phi_lines(phi: float) -> list[str]:
+    """TOML lines for a fixed single-frame [scan.phi]; empty when phi == 0.
+
+    A bare `value` (no range/steps) fixes phi at a single frame — no rocking scan,
+    so run_forward renders that one frame (no max-projection).
+    """
+    if phi == 0.0:
+        return []
+    return ["", "[scan.phi]", f"value = {phi}"]
+
+
 # Mount used for non-FCC cubic oblique runs. Matches the BCC example in
 # docs/crystal-structures.md ("Oblique-eta requirement (BCC and HCP)").
 _BCC_MOUNT = {
@@ -72,6 +91,8 @@ def scaffold_config(
     cif_path: str | None = None,
     scan_mode: str = "single",
     backend: str = "analytic",
+    beam: str = "weak",
+    phi_offset: float | None = None,
 ) -> str:
     """Emit a valid starter dfxm-geo config as TOML text.
 
@@ -90,6 +111,10 @@ def scaffold_config(
       ``ValueError`` — there is no silent fallback to a wrong lattice constant.
     * ``scan_mode`` is accepted but currently a no-op; no scan block is emitted.
     """
+    if beam not in ("weak", "strong"):
+        raise ValueError(f"beam must be 'weak' or 'strong', got {beam!r}")
+    phi = phi_offset if phi_offset is not None else (WEAK_BEAM_PHI_RAD if beam == "weak" else 0.0)
+
     hkl = reflection or (-1, 1, -1)
     is_fcc = structure_type is None or structure_type.lower() == "fcc"
     is_oblique = geometry_mode == "oblique"
@@ -112,6 +137,7 @@ def scaffold_config(
         # The analytic backend renders without a beamstop; only the MC backend needs one.
         f"beamstop = {'true' if backend == 'mc' else 'false'}",
     ]
+    lines += _scan_phi_lines(phi)
 
     # FCC symmetric: simplified path needs no [crystal] mount / [geometry] block.
     if is_fcc and not is_oblique and cif_path is None:
