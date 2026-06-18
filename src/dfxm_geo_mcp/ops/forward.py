@@ -21,7 +21,7 @@ import numpy as np  # noqa: E402
 from dfxm_geo.config import SimulationConfig, run_theta  # noqa: E402
 from dfxm_geo.orchestrator import run_simulation  # noqa: E402
 
-from dfxm_geo_mcp.ops.types import ForwardResult, ForwardStats  # noqa: E402
+from dfxm_geo_mcp.ops.types import ForwardResult, ForwardStats, ResolvedSummary  # noqa: E402
 from dfxm_geo_mcp.ops.validate import validate_config  # noqa: E402
 
 PREVIEW_CAPS = {"max_npixels": 128, "max_nsub": 1, "max_frames": 9}
@@ -69,7 +69,7 @@ def _render_png(
     return buf.getvalue()
 
 
-def _preview_meta(config: SimulationConfig, resolved: dict | None) -> dict:
+def _preview_meta(config: SimulationConfig, resolved: ResolvedSummary | None) -> dict:
     """Presentation metadata for the static HTML / inline caption.
 
     Pure-derived from the (already-capped, analytic) config and the validator's
