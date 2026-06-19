@@ -8,10 +8,22 @@ library's ``gb_cos`` with the A/B frame convention; the assembly (Task 5) reuses
 
 from __future__ import annotations
 
+import tomllib
+
 import numpy as np
 
 from dfxm_geo.crystal.burgers import gb_cos
 from dfxm_geo.crystal.slip_systems import slip_systems
+from dfxm_geo.reciprocal_space.kernel import _crystal_mount_from_toml
+
+from dfxm_geo_mcp.ops.reflections import find_reflections
+from dfxm_geo_mcp.ops.types import (
+    DefectRow,
+    MatrixRow,
+    ReflGeom,
+    SlipSystemLabel,
+    VisibilityResult,
+)
 
 # Strong vs weak split on gb_cos (presentational, NOT a contrast prediction).
 STRONG_CUT = 0.5
@@ -104,3 +116,102 @@ def _resolve_families(structure: str, slip_families: list[str] | None) -> list[s
                 f"Registry families: {sorted(registry)}."
             )
     return resolved
+
+
+def predict_visibility(
+    toml_text: str,
+    *,
+    burgers: tuple[int, ...] | None = None,
+    slip_families: list[str] | None = None,
+    hkl_max: int = 3,
+    threshold_deg: float = 10.0,
+) -> VisibilityResult:
+    """Score dislocation visibility (g.b) across the config's reachable reflections.
+
+    Two modes: defect-first (``burgers`` given) ranks reflections by gb_cos for
+    that one Burgers vector; survey/matrix (``burgers`` omitted) scores every
+    reachable reflection against every slip system of the resolved structure.
+    """
+    if not 1 <= hkl_max <= 6:
+        raise ValueError(f"hkl_max must be between 1 and 6 (got {hkl_max})")
+    if not 0.0 < threshold_deg < 90.0:
+        raise ValueError(f"threshold_deg must be in (0, 90) (got {threshold_deg})")
+
+    data = tomllib.loads(toml_text) if toml_text.strip() else {}
+    try:
+        mount = _crystal_mount_from_toml(data.get("crystal"))
+    except Exception as exc:  # unparseable / unbuildable mount
+        raise ValueError(f"could not build a crystal mount from the config: {exc}") from exc
+    keV = float(data.get("reciprocal", {}).get("keV", 17.0))
+    structure = mount.resolved_structure_type
+
+    refls = find_reflections(toml_text, hkl_max=hkl_max)
+    caveats = [EDGE_CAVEAT]
+    if not refls:
+        caveats.append(
+            "No Laue-reachable reflections at this energy/mount up to "
+            f"hkl_max={hkl_max}; nothing to score."
+        )
+
+    def _geom(r: object) -> ReflGeom:
+        return ReflGeom(
+            hkl=r.hkl, theta_deg=r.theta_deg, eta_deg=r.eta_deg, omega_deg=r.omega_deg  # type: ignore[attr-defined]
+        )
+
+    if burgers is not None:
+        b = tuple(int(x) for x in burgers)
+        if len(b) != 3:
+            raise ValueError(f"burgers must have exactly 3 Miller indices, got {len(b)}: {b}")
+        defect_rows: list[DefectRow] = []
+        for r in refls:
+            value, band = _score(mount, r.hkl, b, threshold_deg)
+            defect_rows.append(DefectRow(refl=_geom(r), gb_cos=value, visibility=band))
+        defect_rows.sort(key=lambda d: d.gb_cos, reverse=True)
+        return VisibilityResult(
+            mode="defect",
+            structure=structure,
+            energy_keV=keV,
+            burgers=b,
+            threshold_deg=threshold_deg,
+            resolved_families=[],
+            systems=[],
+            defect_rows=defect_rows,
+            matrix_rows=[],
+            caveats=caveats,
+        )
+
+    resolved = _resolve_families(structure, slip_families)
+    try:
+        systems = slip_systems(structure, families=resolved)
+    except ValueError as exc:
+        raise ValueError(
+            f"structure {structure!r} has no registered slip systems; register one "
+            f"with dfxm_geo.crystal.slip_systems.register_custom. ({exc})"
+        ) from exc
+    if not systems:
+        raise ValueError(f"no slip systems for structure {structure!r} with families={resolved!r}")
+
+    labels = [SlipSystemLabel(plane=s.n, burgers=s.b, family=s.family) for s in systems]
+    matrix_rows: list[MatrixRow] = []
+    for r in refls:
+        cells = [_score(mount, r.hkl, s.b, threshold_deg)[0] for s in systems]
+        matrix_rows.append(MatrixRow(refl=_geom(r), cells=cells))
+
+    resolved_families = (
+        resolved if resolved is not None else list(dict.fromkeys(s.family for s in systems))
+    )
+    if resolved is not None:
+        caveats.append("Slip families narrowed to: " + ", ".join(resolved) + ".")
+
+    return VisibilityResult(
+        mode="matrix",
+        structure=structure,
+        energy_keV=keV,
+        burgers=None,
+        threshold_deg=threshold_deg,
+        resolved_families=resolved_families,
+        systems=labels,
+        defect_rows=[],
+        matrix_rows=matrix_rows,
+        caveats=caveats,
+    )

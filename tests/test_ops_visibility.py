@@ -10,6 +10,7 @@ from dfxm_geo.crystal.slip_systems import slip_systems
 from dfxm_geo.reciprocal_space.kernel import _crystal_mount_from_toml
 
 from dfxm_geo_mcp.ops import visibility as vis
+from dfxm_geo_mcp.ops.types import VisibilityResult
 
 HCP_TOML = (
     "[crystal]\n"
@@ -94,3 +95,95 @@ def test_alias_map_validates_against_live_registry():
     hcp_families = {s.family for s in slip_systems("hcp")}
     for canonical in vis._HCP_ALIASES.values():
         assert canonical in hcp_families
+
+
+def test_defect_mode_rows_sorted_descending_and_deterministic():
+    res = vis.predict_visibility("", burgers=(1, -1, 0), hkl_max=2)
+    assert isinstance(res, VisibilityResult)
+    assert res.mode == "defect"
+    assert res.structure == "fcc"
+    assert res.matrix_rows == [] and res.systems == []
+    assert len(res.defect_rows) > 0
+    cosines = [r.gb_cos for r in res.defect_rows]
+    assert cosines == sorted(cosines, reverse=True)
+    # determinism
+    res2 = vis.predict_visibility("", burgers=(1, -1, 0), hkl_max=2)
+    assert [r.refl.hkl for r in res2.defect_rows] == [r.refl.hkl for r in res.defect_rows]
+    # always-on edge caveat present
+    assert any("g.(b x u)" in c for c in res.caveats)
+
+
+def test_matrix_mode_shape_and_column_alignment():
+    res = vis.predict_visibility("", hkl_max=2)  # FCC, no burgers -> matrix
+    assert res.mode == "matrix"
+    assert res.defect_rows == [] and res.burgers is None
+    assert len(res.systems) == 12  # FCC {111}<110>
+    assert len(res.matrix_rows) == len(vis.find_reflections("", hkl_max=2))
+    for row in res.matrix_rows:
+        assert len(row.cells) == len(res.systems)
+    # alignment (not just shape): recompute one cell independently
+    from dfxm_geo.reciprocal_space.kernel import _crystal_mount_from_toml
+    mount = _crystal_mount_from_toml(None)
+    row = res.matrix_rows[0]
+    i = 0
+    expected, _ = vis._score(mount, row.refl.hkl, res.systems[i].burgers, res.threshold_deg)
+    assert row.cells[i] == pytest.approx(expected, abs=1e-12)
+
+
+def test_matrix_mode_bcc_has_24_columns():
+    toml = (
+        "[reciprocal]\nhkl = [1, 1, 0]\nkeV = 17.0\nbackend = \"analytic\"\nbeamstop = false\n"
+        "[crystal]\n"
+        'lattice = "cubic"\na = 2.87e-10\n'
+        'structure_type = "bcc"\n'
+        'material = "Fe"\n'
+        "mount_x = [1, 1, 0]\nmount_y = [-1, 1, 0]\nmount_z = [0, 0, 1]\n"
+        "[geometry]\n"
+        'mode = "oblique"\n'
+        # eta is cross-checked by the validator, but predict_visibility never runs
+        # the validator; find_reflections only needs the mount + energy.
+    )
+    res = vis.predict_visibility(toml, hkl_max=2)
+    assert res.structure == "bcc"
+    assert len(res.systems) == 24
+
+
+def test_matrix_mode_hcp_has_reachable_basal_invisible_cell():
+    res = vis.predict_visibility(HCP_TOML, hkl_max=2)
+    assert res.structure == "hcp"
+    basal_cols = [i for i, s in enumerate(res.systems) if s.family == "{0001}<11-20>"]
+    assert basal_cols
+    invisible_cut = float(__import__("numpy").cos(__import__("numpy").deg2rad(80.0)))
+    found = any(
+        row.cells[i] < invisible_cut for row in res.matrix_rows for i in basal_cols
+    )
+    assert found, "expected at least one reachable HCP basal-<a> cell to be invisible"
+
+
+def test_matrix_mode_family_narrowing_with_alias():
+    res = vis.predict_visibility(HCP_TOML, slip_families=["basal"], hkl_max=2)
+    assert res.resolved_families == ["{0001}<11-20>"]
+    assert all(s.family == "{0001}<11-20>" for s in res.systems)
+    # narrowing echoes a caveat naming the canonical family
+    assert any("{0001}<11-20>" in c for c in res.caveats)
+
+
+def test_empty_reachable_returns_empty_rows_with_caveat(monkeypatch):
+    monkeypatch.setattr(vis, "find_reflections", lambda toml_text, hkl_max=3: [])
+    res = vis.predict_visibility("", burgers=(1, -1, 0))
+    assert res.defect_rows == []
+    assert any("reachable" in c.lower() for c in res.caveats)
+
+
+def test_burgers_wrong_length_raises():
+    with pytest.raises(ValueError):
+        vis.predict_visibility("", burgers=(1, 0))  # only 2 ints
+
+
+def test_arg_range_validation():
+    with pytest.raises(ValueError):
+        vis.predict_visibility("", hkl_max=0)
+    with pytest.raises(ValueError):
+        vis.predict_visibility("", threshold_deg=0.0)
+    with pytest.raises(ValueError):
+        vis.predict_visibility("", threshold_deg=90.0)
