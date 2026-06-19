@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -16,6 +17,63 @@ def cache_dir() -> Path:
     d = Path(user_cache_dir(_APP))
     (d / "kernels").mkdir(parents=True, exist_ok=True)
     return d
+
+
+def resolve_output_path(output_path: str | None, *, default: Path, suffix: str) -> Path:
+    """Resolve a user output path to a concrete file, enforcing ``suffix``.
+
+    ``None`` -> ``default``. A POSIX-absolute path on Windows (leading ``/``, not a
+    drive path) is the Cowork ``/mnt/...`` convention, which Windows reads as
+    drive-relative (``C:\\mnt\\...``) and silently misplaces; remap it into the
+    cache previews dir by basename. On POSIX a leading ``/`` is a real absolute
+    path and is NEVER remapped. ``suffix`` (e.g. ``".png"``, ``".html"``) is
+    always enforced. Callers report ``path.resolve()``.
+    """
+    if output_path is None:
+        # ``default`` is already a native Path; enforce suffix and return.
+        path = default
+        if path.suffix.lower() != suffix:
+            stem = path.name[: -len(path.suffix)] if path.suffix else path.name
+            path = path.parent / (stem + suffix)
+        return path
+
+    if (
+        os.name == "nt"
+        and output_path.startswith("/")
+        and re.match(r"^[A-Za-z]:", output_path) is None
+        and "\\" not in output_path
+    ):
+        # POSIX-absolute on Windows: remap basename into cache previews dir.
+        # Use string split to avoid PosixPath instantiation on Windows.
+        basename = output_path.rstrip("/").rsplit("/", 1)[-1]
+        path = cache_dir() / "previews" / basename
+        if path.suffix.lower() != suffix:
+            stem = path.name[: -len(path.suffix)] if path.suffix else path.name
+            path = path.parent / (stem + suffix)
+        return path
+
+    # General case: stay in string-land for suffix enforcement to avoid
+    # PosixPath/WindowsPath cross-platform issues when os.name is monkeypatched.
+    p_str = output_path.replace("\\", "/")
+    # Extract the part after the last "/".
+    basename = p_str.rstrip("/").rsplit("/", 1)[-1] if "/" in p_str else p_str
+    # Directory is everything before the last "/".
+    if "/" in p_str.rstrip("/"):
+        dirpart = p_str.rstrip("/").rsplit("/", 1)[0]
+    else:
+        dirpart = ""
+    # Enforce suffix on basename.
+    dot_idx = basename.rfind(".")
+    if dot_idx == -1:
+        basename_fixed = basename + suffix
+    elif basename[dot_idx:].lower() != suffix:
+        basename_fixed = basename[:dot_idx] + suffix
+    else:
+        basename_fixed = basename
+    # Reconstruct and convert to Path.
+    if dirpart:
+        return Path(dirpart + "/" + basename_fixed)
+    return Path(basename_fixed)
 
 
 def configure_numba_cache() -> None:

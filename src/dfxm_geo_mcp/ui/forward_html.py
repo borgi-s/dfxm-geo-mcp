@@ -160,3 +160,107 @@ def build_rocking_html(
 </script>
 </body></html>
 """
+
+
+_VIS_CSS = """
+  .vis table{border-collapse:collapse;font-size:13px;margin-top:8px}
+  .vis th,.vis td{padding:4px 8px;text-align:left;white-space:nowrap}
+  .vis th{color:#8a90a0;font-weight:600;border-bottom:1px solid #2a2a35}
+  .vis td{color:#cdd2da;font-variant-numeric:tabular-nums}
+  .bar{display:inline-block;height:9px;border-radius:3px;background:#e0457b;vertical-align:middle}
+  .b-strong{color:#7fe0a0}.b-weak{color:#e0c34a}.b-invisible{color:#e0457b}
+  .heat{overflow:auto;max-width:100%}
+  .heat td.cell{text-align:center;color:#0b0b0f;font-weight:600;border:1px solid #1a1a22}
+  .foot{margin-top:18px;padding:12px 14px;background:#15151c;border-radius:8px;color:#9aa1ad;font-size:12px}
+  .foot li{margin:3px 0}
+  .legend{margin:6px 0;color:#8a90a0;font-size:12px}
+"""
+
+
+def _vis_caption(result: dict[str, Any]) -> str:
+    bits = [
+        f"structure {result.get('structure')}",
+        f"{result.get('energy_keV')} keV",
+        f"threshold {result.get('threshold_deg')} deg",
+    ]
+    if result.get("mode") == "defect" and result.get("burgers") is not None:
+        bits.insert(0, "Burgers " + ", ".join(str(v) for v in result["burgers"]))
+    return _htmllib.escape(" - ".join(bits))
+
+
+def _hkl_str(hkl: Any) -> str:
+    return ", ".join(str(v) for v in hkl)
+
+
+def _defect_body(result: dict[str, Any]) -> str:
+    rows = []
+    for r in result.get("defect_rows", []):
+        gbcos = float(r["gb_cos"])
+        band = str(r["visibility"])
+        width = max(1, round(gbcos * 120))
+        rows.append(
+            "<tr>"
+            f"<td>{_htmllib.escape(_hkl_str(r['refl']['hkl']))}</td>"
+            f"<td>{_htmllib.escape(f'{gbcos:.3f}')}</td>"
+            f"<td><span class='bar' style='width:{width}px'></span></td>"
+            f"<td class='b-{_htmllib.escape(band)}'>{_htmllib.escape(band)}</td>"
+            "</tr>"
+        )
+    return (
+        "<div class='vis'><table>"
+        "<tr><th>reflection (hkl)</th><th>g&middot;b</th><th></th><th>visibility</th></tr>"
+        + "".join(rows)
+        + "</table></div>"
+    )
+
+
+def _matrix_body(result: dict[str, Any]) -> str:
+    systems = result.get("systems", [])
+    head = ["<th>reflection</th>"]
+    for s in systems:
+        label = f"{_hkl_str(s['burgers'])} ({_hkl_str(s['plane'])})"
+        head.append(f"<th title='{_htmllib.escape(str(s['family']))}'>{_htmllib.escape(label)}</th>")
+    body_rows = []
+    for row in result.get("matrix_rows", []):
+        cells = [f"<td>{_htmllib.escape(_hkl_str(row['refl']['hkl']))}</td>"]
+        for c in row["cells"]:
+            v = float(c)
+            # pink shade proportional to gb_cos (0 = dark/invisible, 1 = bright).
+            bg = f"background:rgba(224,69,123,{v:.3f})"
+            cells.append(f"<td class='cell' style='{bg}'>{_htmllib.escape(f'{v:.2f}')}</td>")
+        body_rows.append("<tr>" + "".join(cells) + "</tr>")
+    legend = (
+        "<div class='legend'>Cell shade &prop; |g&middot;b|; a near-black cell is "
+        f"below the {_htmllib.escape(str(result.get('threshold_deg', '')))}&deg; invisibility threshold "
+        "(g&perp;b).</div>"
+    )
+    return (
+        "<div class='vis'>" + legend + "<div class='heat'><table>"
+        "<tr>" + "".join(head) + "</tr>" + "".join(body_rows) + "</table></div></div>"
+    )
+
+
+def build_visibility_html(result: dict[str, Any]) -> str:
+    """A self-contained visibility artifact: a ranked table (defect mode) or a
+    reflection x slip-system heatmap (matrix mode), plus a caveats footer.
+
+    ``result`` is ``dataclasses.asdict(VisibilityResult)``. Inline CSS only, NO
+    external origins; all text html-escaped; the embedded JSON blob is `</`-guarded.
+    """
+    body = _defect_body(result) if result.get("mode") == "defect" else _matrix_body(result)
+    caveats = "".join(f"<li>{_htmllib.escape(str(c))}</li>" for c in result.get("caveats", []))
+    blob = json.dumps(result).replace("</", "<\\/")
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DFXM dislocation visibility</title>
+<style>{_CSS}{_VIS_CSS}</style></head>
+<body><div class="wrap">
+  <h1>DFXM dislocation visibility &mdash; g&middot;b ranking</h1>
+  <div class="read">{_vis_caption(result)}</div>
+  {body}
+  <div class="foot"><b>Caveats</b><ul>{caveats}</ul></div>
+</div>
+<script type="application/json" id="dfxm-vis">{blob}</script>
+</body></html>
+"""

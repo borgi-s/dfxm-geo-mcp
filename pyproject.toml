@@ -24,7 +24,7 @@ dev = ["pytest>=8", "pytest-asyncio>=0.23", "mypy>=1.10", "ruff>=0.6"]
 dfxm-geo-mcp = "dfxm_geo_mcp.server:main"
 
 [tool.setuptools]
-packages = ["dfxm_geo_mcp", "dfxm_geo_mcp.ops", "dfxm_geo_mcp.knowledge"]
+packages = ["dfxm_geo_mcp", "dfxm_geo_mcp.ops", "dfxm_geo_mcp.ui", "dfxm_geo_mcp.knowledge"]
 
 [tool.setuptools.package-dir]
 "" = "src"
