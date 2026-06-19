@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-from pathlib import Path
-
 from typing import Any, cast
 
 from fastmcp import Context, FastMCP
@@ -135,12 +133,11 @@ def run_forward(
     if result.needs_bootstrap:
         return {"needs_bootstrap": True, **(result.bootstrap_hint or {})}
 
-    if output_path is not None:
-        path = Path(output_path)
-        if path.suffix.lower() != ".png":
-            path = path.with_suffix(".png")
-    else:
-        path = runtime.cache_dir() / "previews" / "forward_preview.png"
+    path = runtime.resolve_output_path(
+        output_path,
+        default=runtime.cache_dir() / "previews" / "forward_preview.png",
+        suffix=".png",
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(result.png_bytes)
 
@@ -197,12 +194,11 @@ def run_rocking(
     frame_b64s = [_ui._b64(p) for p in res.frames_png]
     html = _html.build_rocking_html(frame_b64s, res.phis, res.intensities, res.meta)
 
-    if output_path is not None:
-        path = Path(output_path)
-        if path.suffix.lower() != ".html":
-            path = path.with_suffix(".html")
-    else:
-        path = runtime.cache_dir() / "previews" / "forward_rocking.html"
+    path = runtime.resolve_output_path(
+        output_path,
+        default=runtime.cache_dir() / "previews" / "forward_rocking.html",
+        suffix=".html",
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html, encoding="utf-8")
 
