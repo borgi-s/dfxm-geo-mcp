@@ -136,6 +136,11 @@ def predict_visibility(
         raise ValueError(f"hkl_max must be between 1 and 6 (got {hkl_max})")
     if not 0.0 < threshold_deg < 90.0:
         raise ValueError(f"threshold_deg must be in (0, 90) (got {threshold_deg})")
+    b: tuple[int, ...] | None = None
+    if burgers is not None:
+        b = tuple(int(x) for x in burgers)
+        if len(b) != 3:
+            raise ValueError(f"burgers must have exactly 3 Miller indices, got {len(b)}: {b}")
 
     data = tomllib.loads(toml_text) if toml_text.strip() else {}
     try:
@@ -158,10 +163,7 @@ def predict_visibility(
             hkl=r.hkl, theta_deg=r.theta_deg, eta_deg=r.eta_deg, omega_deg=r.omega_deg  # type: ignore[attr-defined]
         )
 
-    if burgers is not None:
-        b = tuple(int(x) for x in burgers)
-        if len(b) != 3:
-            raise ValueError(f"burgers must have exactly 3 Miller indices, got {len(b)}: {b}")
+    if b is not None:
         defect_rows: list[DefectRow] = []
         for r in refls:
             value, band = _score(mount, r.hkl, b, threshold_deg)
