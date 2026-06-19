@@ -15,6 +15,7 @@ from dfxm_geo_mcp.ops import forward as _forward
 from dfxm_geo_mcp.ops import reflections as _reflections
 from dfxm_geo_mcp.ops import scaffold as _scaffold
 from dfxm_geo_mcp.ops import rocking as _rocking
+from dfxm_geo_mcp.ops import visibility as _visibility
 from dfxm_geo_mcp.ops import validate as _validate
 from dfxm_geo_mcp.ui import forward_html as _html
 from dfxm_geo_mcp.ui import forward_preview as _ui
@@ -37,6 +38,11 @@ INSTRUCTIONS = (
     "For a φ rocking series, call run_rocking: it writes a self-contained INTERACTIVE "
     "HTML viewer (frame scrubber + live rocking-curve plot, defaulting to one end of "
     "the curve) and reports its .html path — ALWAYS give the user that path. "
+    "Before a beamtime, call predict_visibility to check whether the planned "
+    "reflection will even show a defect: pass burgers (a 3-int Miller direction) "
+    "to rank reachable reflections by g.b for that defect, or omit it for a "
+    "reflection x slip-system visibility matrix. It writes a self-contained HTML "
+    "table/heatmap and reports its .html path — ALWAYS give the user that path. "
 )
 
 mcp = FastMCP(name="dfxm-geo-mcp", instructions=INSTRUCTIONS)
@@ -58,6 +64,51 @@ def find_reflections(toml_text: str, hkl_max: int = 3) -> list[dict]:
     return [
         dataclasses.asdict(r) for r in _reflections.find_reflections(toml_text, hkl_max=hkl_max)
     ]
+
+
+@mcp.tool(annotations={"title": "Predict visibility", "readOnlyHint": True, "idempotentHint": True})
+def predict_visibility(
+    toml_text: str,
+    burgers: list[int] | None = None,
+    slip_families: list[str] | None = None,
+    hkl_max: int = 3,
+    threshold_deg: float = 10.0,
+    output_path: str | None = None,
+) -> dict:
+    """Score how visible a dislocation is in each Laue-reachable reflection (g.b).
+
+    Two modes: pass ``burgers`` (a 3-int Miller direction) to RANK reflections for
+    that one defect; omit it for a reflection x slip-system MATRIX of the crystal's
+    structure. Writes a self-contained HTML artifact (a ranked table or a heatmap)
+    and reports its ``html_path`` alongside the structured scores. Pass
+    ``slip_families`` to narrow the matrix (HCP friendly names like "basal" or the
+    registry strings; e.g. "{111}<110>"). g.b = 0 is screw-exact invisibility;
+    edge dislocations can retain residual contrast (see the result's caveats).
+
+    ALWAYS tell the user the saved .html path so they can open it.
+    """
+    if not 1 <= hkl_max <= 6:
+        raise ValueError(f"hkl_max must be between 1 and 6 (got {hkl_max})")
+    if not 0.0 < threshold_deg < 90.0:
+        raise ValueError(f"threshold_deg must be in (0, 90) (got {threshold_deg})")
+    b = tuple(burgers) if burgers else None
+    result = _visibility.predict_visibility(
+        toml_text,
+        burgers=b,
+        slip_families=slip_families,
+        hkl_max=hkl_max,
+        threshold_deg=threshold_deg,
+    )
+    result_dict = dataclasses.asdict(result)
+    html = _html.build_visibility_html(result_dict)
+    path = runtime.resolve_output_path(
+        output_path,
+        default=runtime.cache_dir() / "previews" / "visibility.html",
+        suffix=".html",
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html, encoding="utf-8")
+    return {**result_dict, "html_path": str(path.resolve())}
 
 
 @mcp.tool(annotations={"title": "Scaffold config", "readOnlyHint": True, "idempotentHint": True})
