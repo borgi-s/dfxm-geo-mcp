@@ -201,7 +201,7 @@ def _defect_body(result: dict[str, Any]) -> str:
         rows.append(
             "<tr>"
             f"<td>{_htmllib.escape(_hkl_str(r['refl']['hkl']))}</td>"
-            f"<td>{gbcos:.3f}</td>"
+            f"<td>{_htmllib.escape(f'{gbcos:.3f}')}</td>"
             f"<td><span class='bar' style='width:{width}px'></span></td>"
             f"<td class='b-{_htmllib.escape(band)}'>{_htmllib.escape(band)}</td>"
             "</tr>"
@@ -227,11 +227,11 @@ def _matrix_body(result: dict[str, Any]) -> str:
             v = float(c)
             # pink shade proportional to gb_cos (0 = dark/invisible, 1 = bright).
             bg = f"background:rgba(224,69,123,{v:.3f})"
-            cells.append(f"<td class='cell' style='{bg}'>{v:.2f}</td>")
+            cells.append(f"<td class='cell' style='{bg}'>{_htmllib.escape(f'{v:.2f}')}</td>")
         body_rows.append("<tr>" + "".join(cells) + "</tr>")
     legend = (
         "<div class='legend'>Cell shade &prop; |g&middot;b|; a near-black cell is "
-        f"below the {result.get('threshold_deg')}&deg; invisibility threshold "
+        f"below the {_htmllib.escape(str(result.get('threshold_deg', '')))}&deg; invisibility threshold "
         "(g&perp;b).</div>"
     )
     return (
