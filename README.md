@@ -18,7 +18,7 @@ Or: `pip install dfxm-geo-mcp` then `dfxm-geo-mcp`.
 
 ## Tools
 
-validate_config · find_reflections · scaffold_config · run_forward (analytic preview — saves a PNG **and** a self-contained `.html`) · run_rocking (interactive φ-rocking-curve viewer: a single self-contained `.html` with a frame scrubber + live rocking-curve plot) · start_bootstrap / get_job_status / get_job_result (MC fidelity).
+validate_config · find_reflections · predict_visibility (g·b reflection-visibility ranking; structured scores plus a self-contained `.html`) · scaffold_config · run_forward (analytic preview; saves a PNG **and** a self-contained `.html`) · run_rocking (interactive φ-rocking-curve viewer: a single self-contained `.html` with a frame scrubber + live rocking-curve plot) · start_bootstrap / get_job_status / get_job_result (MC fidelity).
 
 Both `run_forward` and `run_rocking` write self-contained HTML (image(s) embedded, all CSS/JS inline, no external origins) that opens full-size in any browser and is surfaced by file-showing clients.
 
@@ -29,3 +29,5 @@ A protocol-agnostic ops layer wrapping dfxm-geo, under a thin FastMCP adapter. S
 ## Roadmap (v2)
 
 run_identify · remote HTTP transport · `.mcpb` bundle.
+
+<!-- mcp-name: io.github.borgi-s/dfxm-geo-mcp -->

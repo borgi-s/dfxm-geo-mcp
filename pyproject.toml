@@ -23,6 +23,11 @@ dev = ["pytest>=8", "pytest-asyncio>=0.23", "mypy>=1.10", "ruff>=0.6"]
 [project.scripts]
 dfxm-geo-mcp = "dfxm_geo_mcp.server:main"
 
+[project.urls]
+Homepage = "https://github.com/borgi-s/dfxm-geo-mcp"
+Repository = "https://github.com/borgi-s/dfxm-geo-mcp"
+Issues = "https://github.com/borgi-s/dfxm-geo-mcp/issues"
+
 [tool.setuptools]
 packages = ["dfxm_geo_mcp", "dfxm_geo_mcp.ops", "dfxm_geo_mcp.ui", "dfxm_geo_mcp.knowledge"]
 

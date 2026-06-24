@@ -8,3 +8,4 @@ dist/
 build/
 *.egg-info/
 _demo/
+_vis_demos/
