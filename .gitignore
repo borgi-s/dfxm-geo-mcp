@@ -9,3 +9,5 @@ build/
 *.egg-info/
 _demo/
 _vis_demos/
+mcp-publisher.exe
+CLAUDE.md
