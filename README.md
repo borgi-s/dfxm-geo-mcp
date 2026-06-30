@@ -2,7 +2,7 @@
 
 An MCP server that lets an AI client drive the [dfxm-geo](https://github.com/borgi-s/Geometrical_Optics_master) dark-field X-ray microscopy forward model: validate and scaffold configs, enumerate reachable reflections, and render preview-scale simulations.
 
-![Claude Desktop rendering a DFXM image from a plain-English request](docs/img/money_shot.png)
+![Claude Desktop rendering a DFXM image from a plain-English request](docs/img/moneyshot.png)
 
 ## Run
 
